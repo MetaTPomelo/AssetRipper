@@ -540,6 +540,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 					case PrimitiveType.MapPair:
 						{
 							int count = reader.ReadInt32();
+							int originalCount = count;
 							count = FixArrayCount(reader, etalon, count);
 
 							long remainingBytes = reader.Length - reader.Position;
@@ -562,12 +563,20 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 								reader.Align();
 							}
 
+							// 特殊处理：如果数组count被修复过，可能需要额外的对齐
+							if (count != originalCount)
+							{
+								Logger.Warning(LogCategory.Import, $"Array count was fixed from {originalCount} to {count}, applying additional alignment for {etalon.Name}");
+								reader.Align();
+							}
+
 							AsPairArray = pairs;
 						}
 						break;
 					case PrimitiveType.Complex:
 						{
 							int count = reader.ReadInt32();
+							int originalCount = count;
 							Logger.Info(LogCategory.Import, $"Reading Complex array {etalon.Name}, original count: {count} at position {reader.Position}");
 							count = FixArrayCount(reader, etalon, count);
 							Logger.Info(LogCategory.Import, $"After fix, count: {count} at position {reader.Position}");
@@ -584,6 +593,13 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 							// 添加对齐处理，确保后续字段读取位置正确
 							if (etalon.Align)
 							{
+								reader.Align();
+							}
+							
+							// 特殊处理：如果数组count被修复过，可能需要额外的对齐
+							if (count != originalCount)
+							{
+								Logger.Warning(LogCategory.Import, $"Array count was fixed from {originalCount} to {count}, applying additional alignment for {etalon.Name}");
 								reader.Align();
 							}
 							
