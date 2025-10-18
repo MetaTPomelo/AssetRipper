@@ -4,6 +4,7 @@ using AssetRipper.Assets.IO.Writing;
 using AssetRipper.Assets.Metadata;
 using AssetRipper.Assets.Traversal;
 using AssetRipper.IO.Endian;
+using AssetRipper.Import.Logging;
 using AssetRipper.IO.Files.SerializedFiles;
 using AssetRipper.SerializationLogic;
 using System;
