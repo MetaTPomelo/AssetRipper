@@ -459,6 +459,13 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 						break;
 					case PrimitiveType.Int:
 						AsInt32 = reader.ReadInt32();
+						// 检查异常的大整数值（可能是损坏的数据）
+						if (Math.Abs(AsInt32) > 1000000000 && AsInt32 != int.MaxValue && AsInt32 != int.MinValue)
+						{
+							Logger.Warning(LogCategory.Import, $"Detected suspicious large int value {AsInt32} for field {etalon.Name} at position {reader.Position} - likely corrupted data, setting to 0");
+							AsInt32 = 0;
+						}
+						Logger.Info(LogCategory.Import, $"Read Int32 field {etalon.Name}: {AsInt32} at position {reader.Position}");
 						break;
 					case PrimitiveType.UInt:
 						AsUInt32 = reader.ReadUInt32();
@@ -476,6 +483,12 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 						    (AsSingle.ToString().Length > 15 || AsSingle.ToString().Contains("E")))
 						{
 							Logger.Warning(LogCategory.Import, $"Suspicious float value {AsSingle} for field {etalon.Name} at position {reader.Position} - possible data stream offset");
+						}
+						// 检查极小的浮点数（可能是未初始化的内存）
+						if (Math.Abs(AsSingle) > 0 && Math.Abs(AsSingle) < 1e-40f)
+						{
+							Logger.Warning(LogCategory.Import, $"Detected extremely small float value {AsSingle} for field {etalon.Name} at position {reader.Position} - likely uninitialized memory, setting to 0");
+							AsSingle = 0f;
 						}
 						Logger.Info(LogCategory.Import, $"Read Single field {etalon.Name}: {AsSingle} at position {reader.Position}");
 						break;
