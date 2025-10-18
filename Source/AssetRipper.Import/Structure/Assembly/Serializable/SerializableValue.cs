@@ -568,6 +568,13 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 							{
 								Logger.Warning(LogCategory.Import, $"Array count was fixed from {originalCount} to {count}, applying additional alignment for {etalon.Name}");
 								reader.Align();
+								
+								// 如果原始count是浮点数1.0的二进制表示，可能需要跳过额外的字节
+								if (originalCount == 1065353216) // 0x3f800000 = 1.0f
+								{
+									Logger.Warning(LogCategory.Import, $"Detected float 1.0 as array count, skipping 4 additional bytes for {etalon.Name}");
+									reader.Position += 4; // 跳过额外的4字节
+								}
 							}
 
 							AsPairArray = pairs;
@@ -601,6 +608,13 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 							{
 								Logger.Warning(LogCategory.Import, $"Array count was fixed from {originalCount} to {count}, applying additional alignment for {etalon.Name}");
 								reader.Align();
+								
+								// 如果原始count是浮点数1.0的二进制表示，可能需要跳过额外的字节
+								if (originalCount == 1065353216) // 0x3f800000 = 1.0f
+								{
+									Logger.Warning(LogCategory.Import, $"Detected float 1.0 as array count, skipping 4 additional bytes for {etalon.Name}");
+									reader.Position += 4; // 跳过额外的4字节
+								}
 							}
 							
 							Logger.Info(LogCategory.Import, $"Finished reading Complex array {etalon.Name} at position {reader.Position}");
