@@ -3,8 +3,8 @@ using AssetRipper.Assets.Cloning;
 using AssetRipper.Assets.IO.Writing;
 using AssetRipper.Assets.Metadata;
 using AssetRipper.Assets.Traversal;
-using AssetRipper.IO.Endian;
 using AssetRipper.Import.Logging;
+using AssetRipper.IO.Endian;
 using AssetRipper.IO.Files.SerializedFiles;
 using AssetRipper.SerializationLogic;
 using System;
@@ -681,6 +681,9 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 		// 检查count是否合理，如果异常大可能是类型混淆
 		if (originalCount < 0 || originalCount > 1000000)
 		{
+			// 保存当前位置
+			long originalPosition = reader.Position;
+			
 			// 尝试回退并重新读取，可能是浮点数被误读为整数
 			reader.Position -= 4; // 回退4字节
 			float floatValue = reader.ReadSingle();
@@ -690,26 +693,31 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 			{
 				int count = (int)Math.Round(floatValue);
 				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}");
+				
+				// 重要：将reader位置恢复到原始位置，因为后续代码期望的是整数count的位置
+				reader.Position = originalPosition;
 				return count;
 			}
 			else
 			{
 				// 如果仍然不合理，尝试其他修复策略
-				reader.Position -= 4; // 再次回退
+				reader.Position = originalPosition - 4; // 回到原始位置前4字节
 				
 				// 尝试读取为更小的数据类型
 				if (reader.Position + 2 <= reader.Length)
 				{
-					reader.Position -= 4;
 					short shortCount = reader.ReadInt16();
 					if (shortCount >= 0 && shortCount <= 10000)
 					{
 						Logger.Warning(LogCategory.Import, $"Using short value {shortCount} as array count for field {etalon.Name}");
+						// 恢复位置到原始位置
+						reader.Position = originalPosition;
 						return shortCount;
 					}
 					else
 					{
 						// 最后的修复尝试：基于剩余字节数估算合理的count
+						reader.Position = originalPosition; // 恢复到原始位置
 						long remainingBytes = reader.Length - reader.Position;
 						if (remainingBytes > 0)
 						{
