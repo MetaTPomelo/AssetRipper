@@ -471,6 +471,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 						break;
 					case PrimitiveType.Single:
 						AsSingle = reader.ReadSingle();
+						Logger.Info(LogCategory.Import, $"Read Single field {etalon.Name}: {AsSingle} at position {reader.Position}");
 						break;
 					case PrimitiveType.Double:
 						AsDouble = reader.ReadDouble();
@@ -555,20 +556,38 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 								pairs[i] = pair;
 							}
 
+							// 添加对齐处理，确保后续字段读取位置正确
+							if (etalon.Align)
+							{
+								reader.Align();
+							}
+
 							AsPairArray = pairs;
 						}
 						break;
 					case PrimitiveType.Complex:
 						{
 							int count = reader.ReadInt32();
+							Logger.Info(LogCategory.Import, $"Reading Complex array {etalon.Name}, original count: {count} at position {reader.Position}");
 							count = FixArrayCount(reader, etalon, count);
+							Logger.Info(LogCategory.Import, $"After fix, count: {count} at position {reader.Position}");
 							ThrowIfNotEnoughSpaceToReadArray(reader, etalon, count);
 
 							IUnityAssetBase[] structures = CreateArray<IUnityAssetBase>(count);
 							for (int i = 0; i < count; i++)
 							{
+								Logger.Info(LogCategory.Import, $"Reading array element {i} of {etalon.Name} at position {reader.Position}");
 								structures[i] = CreateAndReadComplexStructure(ref reader, version, flags, depth, etalon);
+								Logger.Info(LogCategory.Import, $"Finished reading array element {i} of {etalon.Name} at position {reader.Position}");
 							}
+							
+							// 添加对齐处理，确保后续字段读取位置正确
+							if (etalon.Align)
+							{
+								reader.Align();
+							}
+							
+							Logger.Info(LogCategory.Import, $"Finished reading Complex array {etalon.Name} at position {reader.Position}");
 							AsAssetArray = structures;
 						}
 						break;
@@ -662,14 +681,19 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 
 		static IUnityAssetBase CreateAndReadComplexStructure(ref EndianSpanReader reader, UnityVersion version, TransferInstructionFlags flags, int depth, SerializableType.Field etalon)
 		{
+			Logger.Info(LogCategory.Import, $"Creating complex structure {etalon.Type.Name} at position {reader.Position}");
 			IUnityAssetBase asset = etalon.Type.CreateInstance(depth + 1, version);
 			if (asset is SerializableStructure structure)
 			{
+				Logger.Info(LogCategory.Import, $"Reading SerializableStructure {etalon.Type.Name} at position {reader.Position}");
 				structure.Read(ref reader, version, flags);
+				Logger.Info(LogCategory.Import, $"Finished reading SerializableStructure {etalon.Type.Name} at position {reader.Position}");
 			}
 			else
 			{
+				Logger.Info(LogCategory.Import, $"Reading asset {etalon.Type.Name} at position {reader.Position}");
 				asset.Read(ref reader, flags);
+				Logger.Info(LogCategory.Import, $"Finished reading asset {etalon.Type.Name} at position {reader.Position}");
 			}
 
 			return asset;
@@ -692,10 +716,10 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 			if (floatValue >= 0 && floatValue <= 1000000 && Math.Abs(floatValue - Math.Round(floatValue)) < 0.001f)
 			{
 				int count = (int)Math.Round(floatValue);
-				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}");
+				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}. Reader position after fix: {reader.Position}");
 				
-				// 重要：将reader位置恢复到原始位置，因为后续代码期望的是整数count的位置
-				reader.Position = originalPosition;
+				// 重要：数据流中实际存储的是浮点数，所以reader位置已经在正确位置
+				// 不需要恢复位置，因为我们已经读取了浮点数
 				return count;
 			}
 			else
