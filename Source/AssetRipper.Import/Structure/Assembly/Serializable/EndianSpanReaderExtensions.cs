@@ -1,4 +1,5 @@
-﻿using AssetRipper.IO.Endian;
+using AssetRipper.IO.Endian;
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -9,6 +10,7 @@ internal static class EndianSpanReaderExtensions
 	public static T[] ReadPrimitiveArray<T>(this ref EndianSpanReader reader, UnityVersion version) where T : unmanaged
 	{
 		int count = reader.ReadInt32();
+		count = FixArrayCount(ref reader, count);
 		int index = 0;
 		ThrowIfNegativeCount(count);
 		ThrowIfNotEnoughSpaceForArray(ref reader, count, Unsafe.SizeOf<T>());
@@ -35,6 +37,7 @@ internal static class EndianSpanReaderExtensions
 	public static T[][] ReadPrimitiveArrayArray<T>(this ref EndianSpanReader reader, UnityVersion version) where T : unmanaged
 	{
 		int count = reader.ReadInt32();
+		count = FixArrayCount(ref reader, count);
 		int index = 0;
 		ThrowIfNegativeCount(count);
 		ThrowIfNotEnoughSpaceForArray(ref reader, count, sizeof(int));
@@ -68,6 +71,7 @@ internal static class EndianSpanReaderExtensions
 	public static string[] ReadStringArray(this ref EndianSpanReader reader, UnityVersion version)
 	{
 		int count = reader.ReadInt32();
+		count = FixArrayCount(ref reader, count);
 		int index = 0;
 		ThrowIfNegativeCount(count);
 		ThrowIfNotEnoughSpaceForArray(ref reader, count, sizeof(int));
@@ -94,6 +98,7 @@ internal static class EndianSpanReaderExtensions
 	public static string[][] ReadStringArrayArray(this ref EndianSpanReader reader, UnityVersion version)
 	{
 		int count = reader.ReadInt32();
+		count = FixArrayCount(ref reader, count);
 		int index = 0;
 		ThrowIfNegativeCount(count);
 		ThrowIfNotEnoughSpaceForArray(ref reader, count, sizeof(int));
@@ -118,6 +123,68 @@ internal static class EndianSpanReaderExtensions
 	}
 
 	private static bool IsAlignArrays(UnityVersion version) => version.GreaterThanOrEquals(2017);
+
+	private static int FixArrayCount(ref EndianSpanReader reader, int originalCount)
+	{
+		// 检查count是否合理，如果异常大可能是类型混淆
+		if (originalCount < 0 || originalCount > 1000000)
+		{
+			// 尝试回退并重新读取，可能是浮点数被误读为整数
+			reader.Position -= 4; // 回退4字节
+			float floatValue = reader.ReadSingle();
+			
+			// 如果浮点数值合理（接近整数），使用它作为count
+			if (floatValue >= 0 && floatValue <= 1000000 && Math.Abs(floatValue - Math.Round(floatValue)) < 0.001f)
+			{
+				int count = (int)Math.Round(floatValue);
+				return count;
+			}
+			else
+			{
+				// 如果仍然不合理，尝试其他修复策略
+				reader.Position -= 4; // 再次回退
+				
+				// 尝试读取为更小的数据类型
+				if (reader.Position + 2 <= reader.Length)
+				{
+					reader.Position -= 4;
+					short shortCount = reader.ReadInt16();
+					if (shortCount >= 0 && shortCount <= 10000)
+					{
+						return shortCount;
+					}
+					else
+					{
+						// 最后的修复尝试：基于剩余字节数估算合理的count
+						long remainingBytes = reader.Length - reader.Position;
+						if (remainingBytes > 0)
+						{
+							// 假设每个元素至少4字节，估算最大可能的count
+							int estimatedCount = Math.Min((int)(remainingBytes / 4), 1000);
+							if (estimatedCount > 0)
+							{
+								return estimatedCount;
+							}
+							else
+							{
+								throw new InvalidDataException($"Cannot determine valid array count. Original value: {originalCount}, Remaining bytes: {remainingBytes}");
+							}
+						}
+						else
+						{
+							throw new InvalidDataException($"Cannot determine valid array count. Original value: {originalCount}");
+						}
+					}
+				}
+				else
+				{
+					throw new InvalidDataException($"Cannot determine valid array count. Original value: {originalCount}");
+				}
+			}
+		}
+		
+		return originalCount;
+	}
 
 	[DebuggerHidden]
 	private static void ThrowIfNegativeCount(int count)
