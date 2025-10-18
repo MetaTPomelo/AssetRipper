@@ -6,6 +6,7 @@ using AssetRipper.Assets.Traversal;
 using AssetRipper.IO.Endian;
 using AssetRipper.IO.Files.SerializedFiles;
 using AssetRipper.SerializationLogic;
+using System;
 using System.Collections;
 using System.Diagnostics;
 
@@ -537,6 +538,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 					case PrimitiveType.MapPair:
 						{
 							int count = reader.ReadInt32();
+							count = FixArrayCount(reader, etalon, count);
 
 							long remainingBytes = reader.Length - reader.Position;
 							if (remainingBytes < count)
@@ -558,6 +560,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 					case PrimitiveType.Complex:
 						{
 							int count = reader.ReadInt32();
+							count = FixArrayCount(reader, etalon, count);
 							ThrowIfNotEnoughSpaceToReadArray(reader, etalon, count);
 
 							IUnityAssetBase[] structures = CreateArray<IUnityAssetBase>(count);
@@ -617,12 +620,14 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 					case PrimitiveType.Complex:
 						{
 							int outerCount = reader.ReadInt32();
+							outerCount = FixArrayCount(reader, etalon, outerCount);
 							ThrowIfNotEnoughSpaceToReadArray(reader, etalon, outerCount);
 							IUnityAssetBase[][] result = CreateArray<IUnityAssetBase[]>(outerCount);
 
 							for (int i = 0; i < outerCount; i++)
 							{
 								int innerCount = reader.ReadInt32();
+								innerCount = FixArrayCount(reader, etalon, innerCount);
 								ThrowIfNotEnoughSpaceToReadArray(reader, etalon, innerCount);
 
 								IUnityAssetBase[] structures = CreateArray<IUnityAssetBase>(innerCount);
@@ -668,6 +673,71 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 
 			return asset;
 		}
+	}
+
+	private static int FixArrayCount(EndianSpanReader reader, SerializableType.Field etalon, int originalCount)
+	{
+		// 检查count是否合理，如果异常大可能是类型混淆
+		if (originalCount < 0 || originalCount > 1000000)
+		{
+			// 尝试回退并重新读取，可能是浮点数被误读为整数
+			reader.Position -= 4; // 回退4字节
+			float floatValue = reader.ReadSingle();
+			
+			// 如果浮点数值合理（接近整数），使用它作为count
+			if (floatValue >= 0 && floatValue <= 1000000 && Math.Abs(floatValue - Math.Round(floatValue)) < 0.001f)
+			{
+				int count = (int)Math.Round(floatValue);
+				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}");
+				return count;
+			}
+			else
+			{
+				// 如果仍然不合理，尝试其他修复策略
+				reader.Position -= 4; // 再次回退
+				
+				// 尝试读取为更小的数据类型
+				if (reader.Position + 2 <= reader.Length)
+				{
+					reader.Position -= 4;
+					short shortCount = reader.ReadInt16();
+					if (shortCount >= 0 && shortCount <= 10000)
+					{
+						Logger.Warning(LogCategory.Import, $"Using short value {shortCount} as array count for field {etalon.Name}");
+						return shortCount;
+					}
+					else
+					{
+						// 最后的修复尝试：基于剩余字节数估算合理的count
+						long remainingBytes = reader.Length - reader.Position;
+						if (remainingBytes > 0)
+						{
+							// 假设每个元素至少4字节，估算最大可能的count
+							int estimatedCount = Math.Min((int)(remainingBytes / 4), 1000);
+							if (estimatedCount > 0)
+							{
+								Logger.Warning(LogCategory.Import, $"Estimated array count {estimatedCount} based on remaining bytes for field {etalon.Name}");
+								return estimatedCount;
+							}
+							else
+							{
+								throw new InvalidDataException($"Cannot determine valid array count for field {etalon.Name}. Original value: {originalCount}, Remaining bytes: {remainingBytes}");
+							}
+						}
+						else
+						{
+							throw new InvalidDataException($"Cannot determine valid array count for field {etalon.Name}. Original value: {originalCount}");
+						}
+					}
+				}
+				else
+				{
+					throw new InvalidDataException($"Cannot determine valid array count for field {etalon.Name}. Original value: {originalCount}");
+				}
+			}
+		}
+		
+		return originalCount;
 	}
 
 	private static void ThrowIfNotEnoughSpaceToReadArray(EndianSpanReader reader, SerializableType.Field etalon, int count)
