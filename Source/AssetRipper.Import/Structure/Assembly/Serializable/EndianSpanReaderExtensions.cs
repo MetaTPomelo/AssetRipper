@@ -200,8 +200,8 @@ internal static class EndianSpanReaderExtensions
 			if (floatValue >= 0 && floatValue <= 1000000 && Math.Abs(floatValue - Math.Round(floatValue)) < 0.001f)
 			{
 				int count = (int)Math.Round(floatValue);
-				// 重要：将reader位置恢复到原始位置，因为后续代码期望的是整数count的位置
-				reader.Position = originalPosition;
+				// 重要：数据流中实际存储的是浮点数，所以reader位置已经在正确位置
+				// 不需要恢复位置，因为我们已经读取了浮点数
 				return count;
 			}
 			else
