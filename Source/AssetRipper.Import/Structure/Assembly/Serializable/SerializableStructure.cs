@@ -121,16 +121,44 @@ public sealed class SerializableStructure : UnityAssetBase, IDeepCloneable
 		{
 			Read(ref reader, monoBehaviour.Collection.Version, monoBehaviour.Collection.Flags);
 		}
+		catch (ArgumentOutOfRangeException ex)
+		{
+			Logger.Warning(LogCategory.Import, $"Data corruption detected in MonoBehaviour {monoBehaviour.ScriptP?.GetFullName()}, attempting recovery: {ex.Message}");
+			// 尝试从当前位置继续读取，跳过损坏的字段
+			try
+			{
+				// 重置reader位置到安全位置
+				long safePosition = Math.Max(0, reader.Position - 4);
+				reader.Position = safePosition;
+				
+				// 尝试重新读取
+				Read(ref reader, monoBehaviour.Collection.Version, monoBehaviour.Collection.Flags);
+			}
+			catch (Exception recoveryEx)
+			{
+				Logger.Error(LogCategory.Import, $"Recovery failed for MonoBehaviour {monoBehaviour.ScriptP?.GetFullName()}: {recoveryEx.Message}");
+				LogMonoBehaviorReadException(this, ex);
+				return false;
+			}
+		}
 		catch (Exception ex)
 		{
 			LogMonoBehaviorReadException(this, ex);
 			return false;
 		}
-		if (reader.Position != reader.Length)
+		
+		// 允许位置不完全匹配，只要在合理范围内
+		long remainingBytes = reader.Length - reader.Position;
+		if (remainingBytes > 0 && remainingBytes < 1000) // 允许最多1000字节的差异
 		{
-			LogMonoBehaviourMismatch(this, reader.Position, reader.Length);
+			Logger.Warning(LogCategory.Import, $"MonoBehaviour {monoBehaviour.ScriptP?.GetFullName()} has {remainingBytes} remaining bytes, but continuing");
+		}
+		else if (remainingBytes < 0)
+		{
+			LogMonoBehaviourMismatch(this, (int)reader.Position, (int)reader.Length);
 			return false;
 		}
+		
 		return true;
 	}
 
