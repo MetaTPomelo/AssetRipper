@@ -471,6 +471,12 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 						break;
 					case PrimitiveType.Single:
 						AsSingle = reader.ReadSingle();
+						// 检查浮点数是否看起来异常（可能是从错误位置读取的）
+						if (Math.Abs(AsSingle) > 0.0001f && Math.Abs(AsSingle) < 1000000f && 
+						    (AsSingle.ToString().Length > 15 || AsSingle.ToString().Contains("E")))
+						{
+							Logger.Warning(LogCategory.Import, $"Suspicious float value {AsSingle} for field {etalon.Name} at position {reader.Position} - possible data stream offset");
+						}
 						Logger.Info(LogCategory.Import, $"Read Single field {etalon.Name}: {AsSingle} at position {reader.Position}");
 						break;
 					case PrimitiveType.Double:
@@ -749,7 +755,16 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}. Reader position after fix: {reader.Position}");
 				
 				// 重要：数据流中实际存储的是浮点数，所以reader位置已经在正确位置
-				// 不需要恢复位置，因为我们已经读取了浮点数
+				// 但是，如果这是浮点数1.0，可能需要特殊处理
+				if (floatValue == 1.0f)
+				{
+					Logger.Warning(LogCategory.Import, $"Detected float 1.0 as array count for {etalon.Name}, this might indicate data stream corruption");
+					// 尝试回退到原始位置，重新读取为整数
+					reader.Position = originalPosition;
+					// 不读取任何内容，让调用者处理
+					return 0; // 返回0表示空数组，跳过这个损坏的字段
+				}
+				
 				return count;
 			}
 			else
