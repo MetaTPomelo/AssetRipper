@@ -490,6 +490,12 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 							Logger.Warning(LogCategory.Import, $"Detected extremely small float value {AsSingle} for field {etalon.Name} at position {reader.Position} - likely uninitialized memory, setting to 0");
 							AsSingle = 0f;
 						}
+						// 检查异常大的浮点数（可能是损坏的数据）
+						else if (Math.Abs(AsSingle) > 1e10f && !float.IsInfinity(AsSingle) && !float.IsNaN(AsSingle))
+						{
+							Logger.Warning(LogCategory.Import, $"Detected extremely large float value {AsSingle} for field {etalon.Name} at position {reader.Position} - likely corrupted data, setting to 0");
+							AsSingle = 0f;
+						}
 						Logger.Info(LogCategory.Import, $"Read Single field {etalon.Name}: {AsSingle} at position {reader.Position}");
 						break;
 					case PrimitiveType.Double:
