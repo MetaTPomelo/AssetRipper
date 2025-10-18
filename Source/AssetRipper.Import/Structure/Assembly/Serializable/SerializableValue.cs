@@ -476,7 +476,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 						AsDouble = reader.ReadDouble();
 						break;
 					case PrimitiveType.String:
-						AsString = reader.ReadUtf8StringAligned().String;
+						AsString = ReadUtf8StringSafe(ref reader).String;
 						break;
 					case PrimitiveType.Complex:
 						AsAsset = CreateAndReadComplexStructure(ref reader, version, flags, depth, etalon);
@@ -747,6 +747,66 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 		}
 		
 		return originalCount;
+	}
+
+	private static Utf8String ReadUtf8StringSafe(ref EndianSpanReader reader)
+	{
+		try
+		{
+			return reader.ReadUtf8String();
+		}
+		catch (ArgumentOutOfRangeException ex)
+		{
+			// 如果字符串长度读取失败，尝试修复
+			long originalPosition = reader.Position;
+			
+			// 尝试读取字符串长度
+			try
+			{
+				reader.Position = originalPosition;
+				int length = reader.ReadInt32();
+				
+				// 检查长度是否合理
+				if (length < 0 || length > 1000000)
+				{
+					// 尝试将长度解释为浮点数
+					reader.Position = originalPosition;
+					float floatLength = reader.ReadSingle();
+					if (floatLength >= 0 && floatLength <= 1000000)
+					{
+						length = (int)Math.Round(floatLength);
+					}
+					else
+					{
+						// 如果仍然不合理，使用默认值
+						length = 0;
+					}
+				}
+				
+				// 检查是否有足够的字节
+				if (reader.Position + length > reader.Length)
+				{
+					length = (int)(reader.Length - reader.Position);
+					if (length < 0) length = 0;
+				}
+				
+				if (length > 0)
+				{
+					byte[] bytes = reader.ReadBytesExact(length);
+					return new Utf8String(bytes);
+				}
+				else
+				{
+					return new Utf8String(Array.Empty<byte>());
+				}
+			}
+			catch
+			{
+				// 如果所有修复尝试都失败，返回空字符串
+				reader.Position = originalPosition;
+				return new Utf8String(Array.Empty<byte>());
+			}
+		}
 	}
 
 	private static void ThrowIfNotEnoughSpaceToReadArray(EndianSpanReader reader, SerializableType.Field etalon, int count)
