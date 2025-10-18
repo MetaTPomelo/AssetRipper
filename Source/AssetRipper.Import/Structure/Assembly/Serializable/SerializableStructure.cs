@@ -141,7 +141,7 @@ public sealed class SerializableStructure : UnityAssetBase, IDeepCloneable
 
 	private static void LogMonoBehaviorReadException(SerializableStructure structure, Exception ex)
 	{
-		Logger.Error(LogCategory.Import, $"Unable to read MonoBehaviour Structure, because script {structure} layout mismatched binary content ({ex.GetType().Name}).");
+		Logger.Error(LogCategory.Import, $"Unable to read MonoBehaviour Structure, because script {structure} layout mismatched binary content ({ex}).");
 	}
 
 	public int Depth { get; }
