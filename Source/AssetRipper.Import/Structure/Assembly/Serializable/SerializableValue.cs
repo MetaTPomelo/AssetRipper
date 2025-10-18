@@ -555,12 +555,6 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 								pairs[i] = pair;
 							}
 
-							// 添加对齐处理，确保后续字段读取位置正确
-							if (etalon.Align)
-							{
-								reader.Align();
-							}
-
 							AsPairArray = pairs;
 						}
 						break;
@@ -575,13 +569,6 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 							{
 								structures[i] = CreateAndReadComplexStructure(ref reader, version, flags, depth, etalon);
 							}
-							
-							// 添加对齐处理，确保后续字段读取位置正确
-							if (etalon.Align)
-							{
-								reader.Align();
-							}
-							
 							AsAssetArray = structures;
 						}
 						break;
@@ -705,10 +692,10 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 			if (floatValue >= 0 && floatValue <= 1000000 && Math.Abs(floatValue - Math.Round(floatValue)) < 0.001f)
 			{
 				int count = (int)Math.Round(floatValue);
-				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}. Reader position after fix: {reader.Position}");
+				Logger.Warning(LogCategory.Import, $"Detected float value {floatValue} being read as array count for field {etalon.Name}, using {count}");
 				
-				// 重要：数据流中实际存储的是浮点数，所以reader位置已经在正确位置
-				// 不需要恢复位置，因为我们已经读取了浮点数
+				// 重要：将reader位置恢复到原始位置，因为后续代码期望的是整数count的位置
+				reader.Position = originalPosition;
 				return count;
 			}
 			else
