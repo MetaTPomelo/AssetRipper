@@ -25,6 +25,10 @@ public sealed class SerializableStructure : UnityAssetBase, IDeepCloneable
 
 	public void Read(ref EndianSpanReader reader, UnityVersion version, TransferInstructionFlags flags)
 	{
+		// 记录读取开始位置，用于调试
+		long startPosition = reader.Position;
+		Logger.Info(LogCategory.Import, $"Starting to read SerializableStructure {Type.FullName} at position {startPosition}");
+		
 		for (int i = 0; i < Fields.Length; i++)
 		{
 			SerializableType.Field etalon = Type.Fields[i];
@@ -33,6 +37,8 @@ public sealed class SerializableStructure : UnityAssetBase, IDeepCloneable
 				Fields[i].Read(ref reader, version, flags, Depth, etalon);
 			}
 		}
+		
+		Logger.Info(LogCategory.Import, $"Finished reading SerializableStructure {Type.FullName} at position {reader.Position}");
 	}
 
 	public void Write(AssetWriter writer)
