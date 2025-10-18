@@ -792,8 +792,8 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 				
 				if (length > 0)
 				{
-					byte[] bytes = reader.ReadBytesExact(length);
-					return new Utf8String(bytes);
+					ReadOnlySpan<byte> bytes = reader.ReadBytesExact(length);
+					return new Utf8String(bytes.ToArray());
 				}
 				else
 				{
