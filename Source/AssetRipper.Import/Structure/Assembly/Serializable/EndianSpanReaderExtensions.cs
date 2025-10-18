@@ -111,8 +111,8 @@ internal static class EndianSpanReaderExtensions
 				
 				if (length > 0)
 				{
-					byte[] bytes = reader.ReadBytesExact(length);
-					return new Utf8String(bytes);
+					ReadOnlySpan<byte> bytes = reader.ReadBytesExact(length);
+					return new Utf8String(bytes.ToArray());
 				}
 				else
 				{
