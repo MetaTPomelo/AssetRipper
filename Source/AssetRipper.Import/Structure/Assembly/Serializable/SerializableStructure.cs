@@ -129,7 +129,7 @@ public sealed class SerializableStructure : UnityAssetBase, IDeepCloneable
 			{
 				// 重置reader位置到安全位置
 				long safePosition = Math.Max(0, reader.Position - 4);
-				reader.Position = safePosition;
+				reader.Position = (int)safePosition;
 				
 				// 尝试重新读取
 				Read(ref reader, monoBehaviour.Collection.Version, monoBehaviour.Collection.Flags);
