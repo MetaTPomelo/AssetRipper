@@ -682,7 +682,7 @@ public record struct SerializableValue([property: DebuggerBrowsable(DebuggerBrow
 		if (originalCount < 0 || originalCount > 1000000)
 		{
 			// 保存当前位置
-			long originalPosition = reader.Position;
+			int originalPosition = (int)reader.Position;
 			
 			// 尝试回退并重新读取，可能是浮点数被误读为整数
 			reader.Position -= 4; // 回退4字节
